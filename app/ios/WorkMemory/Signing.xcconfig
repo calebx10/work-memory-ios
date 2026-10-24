@@ -1,0 +1,3 @@
+// Shared defaults. Keep your own Apple identity in the ignored local file.
+WORK_MEMORY_BUNDLE_IDENTIFIER = com.workmemory.personal
+#include? "Signing.local.xcconfig"

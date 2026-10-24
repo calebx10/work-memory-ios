@@ -14,6 +14,10 @@ assert info['UIBackgroundModes']==['audio']
 assert 'NSMicrophoneUsageDescription' in info
 assert 'NSAppTransportSecurity' not in info
 plistlib.loads((ios/'WorkMemory/PrivacyInfo.xcprivacy').read_bytes())
+assert not re.search(r'DEVELOPMENT_TEAM\s*=\s*"?[A-Z0-9]{10}', project), 'Personal signing identity must stay in Signing.local.xcconfig'
+signing=(ios/'WorkMemory/Signing.xcconfig').read_text()
+assert '#include? "Signing.local.xcconfig"' in signing
+assert 'Signing.local.xcconfig' in (root/'.gitignore').read_text()
 assert 'DEVELOPMENT_TEAM' not in (root/'README.md').read_text() or '自己的' in (root/'README.md').read_text()
 for name in ['WorkMemory/SettingsView.swift','WorkMemory/MemoryViews.swift','WorkMemory/AIController.swift','Core/AIService.swift']:
     assert name in project, f'Unwired source: {name}'

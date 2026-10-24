@@ -24,6 +24,7 @@ xcuserdata/
 *.cer
 *.ipa
 *.xcarchive/
+Signing.local.xcconfig
 node_modules/
 __pycache__/
 .venv/

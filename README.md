@@ -4,6 +4,22 @@
 
 手机可以独立录音、转文字、提炼重点、整理选题；日常使用不需要 Mac。Mac 目前只用于开发、安装和重新签名。
 
+**源码按 MIT 许可证免费开放。AI 服务不包含在项目里：请使用自己的 API 凭证和额度，费用直接付给服务商。**本项目不收取 API 费用，不提供共享密钥或免费 AI 账户。
+
+## 下载后怎么用
+
+- **让 Codex 帮你装：**下载仓库并在 Codex 中打开，复制 [这份安装指令](docs/CODEX_QUICKSTART.md)。它会引导你使用自己的 Apple 账户、安装到自己的 iPhone。
+- **自己用 Xcode 装：**按 [中文安装教程](docs/INSTALL.md) 操作。需要 Mac、Xcode 和 iOS 17+ 的 iPhone。
+- **先不配置 API：**仍可本地录音、回听和导出；需要 AI 时再在手机里填写自己的凭证。
+
+```sh
+git clone https://github.com/calebx10/work-memory-ios.git
+cd work-memory-ios
+open app/ios/WorkMemory.xcodeproj
+```
+
+这是早期个人项目，尚未完成所有真机验收；当前没有 App Store/TestFlight 下载链接。GitHub 开源不免除苹果签名限制，免费个人签名通常每 7 天需要重新安装。请先用短录音测试并备份重要内容，实际验证记录见 [测试计划](docs/TEST_PLAN.md)。
+
 ## 使用方法
 
 1. 打开“工作记忆”，阅读首次隐私说明。
@@ -37,7 +53,7 @@ xcodebuild -project app/ios/WorkMemory.xcodeproj -scheme WorkMemory -destination
 xcodebuild -project app/ios/WorkMemory.xcodeproj -scheme WorkMemory -destination 'platform=iOS Simulator,name=iPhone Duo' -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test
 ```
 
-`generate_project.py` 会保留已经选择的 DEVELOPMENT_TEAM；更换个人签名请在 Xcode 中选择自己的 Team。
+`generate_project.py` 将个人签名保留在被 Git 忽略的 `app/ios/WorkMemory/Signing.local.xcconfig`。首次配置可以使用 `--team-id` 和 `--bundle-id` 参数，具体见 [安装教程](docs/INSTALL.md)。共享项目不包含原作者的签名身份。
 
 UI 测试使用 Debug 专属的 `--ui-testing` 参数、独立测试目录和合成音频/模拟 AI；不读取真实录音、不调用外部服务、不收费。Release 不包含模拟 AI。测试数据不会出现在正常启动的 App 中。
 
@@ -61,3 +77,11 @@ UI 测试使用 Debug 专属的 `--ui-testing` 参数、独立测试目录和合
 - [OpenAI 结构化输出](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=chat)
 - [APIMart 音频转写](https://docs.apimart.ai/en/api-reference/audios/whisper-1)
 - [DeepSeek 接口](https://api-docs.deepseek.com/)
+
+## 开源许可与贡献
+
+采用 [MIT 许可证](LICENSE)，允许使用、修改、分发及商业使用，需保留版权与许可声明。开源授权不包含 Apple 开发者账户、证书、API 服务或服务商商标的授权，也不保证 AI 服务永久免费或永久可用。
+
+当前 Swift 工程没有第三方包依赖；没有直接合并或复制 WalkWrite、Meet2Notes 的实现。它们是早期产品研究参考。App 图标使用 AI 生成，来源和提示词见 [设计记录](docs/design/APP_ICON.md)。
+
+欢迎按 [贡献指南](CONTRIBUTING.md) 提交改进，隐私与漏洞处理见 [安全说明](SECURITY.md)。

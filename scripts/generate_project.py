@@ -4,6 +4,16 @@ from pathlib import Path
 import hashlib
 import json
 import re
+import argparse
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--team-id', help='Your Apple Team ID; saved only in ignored Signing.local.xcconfig')
+parser.add_argument('--bundle-id', help='Your unique bundle ID, for example com.yourname.workmemory')
+args = parser.parse_args()
+if args.team_id and not re.fullmatch(r'[A-Z0-9]{10}', args.team_id):
+    parser.error('Team ID must contain 10 uppercase letters/digits')
+if args.bundle_id and not re.fullmatch(r'[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+', args.bundle_id):
+    parser.error('Bundle ID must be a reverse-domain identifier')
 
 root = Path(__file__).resolve().parents[1]
 ios = root / 'app/ios'
@@ -13,7 +23,19 @@ objects = {}
 existing_project = project / 'project.pbxproj'
 existing = existing_project.read_text() if existing_project.exists() else ''
 match = re.search(r'DEVELOPMENT_TEAM\s*=\s*"?([A-Z0-9]+)', existing)
-team_id = match.group(1) if match else None
+local_settings = ios / 'WorkMemory/Signing.local.xcconfig'
+local_text = local_settings.read_text() if local_settings.exists() else ''
+# Migrate the old project identity once without publishing it in generated files.
+legacy_team = match.group(1) if match else None
+if not local_text and legacy_team:
+    local_text = f'DEVELOPMENT_TEAM = {legacy_team}\n'
+for key, value in [('DEVELOPMENT_TEAM', args.team_id), ('WORK_MEMORY_BUNDLE_IDENTIFIER', args.bundle_id)]:
+    if value:
+        local_text = re.sub(rf'(?m)^{key}\s*=.*\n?', '', local_text)
+        if local_text and not local_text.endswith('\n'): local_text += '\n'
+        local_text += f'{key} = {value}\n'
+if local_text:
+    local_settings.write_text(local_text)
 def uid(name): return hashlib.sha256(name.encode()).hexdigest()[:24].upper()
 def add(name, text):
     objects[uid(name)] = text
@@ -27,6 +49,7 @@ for file in sorted(ios.glob('Core/*.swift')) + sorted(ios.glob('WorkMemory/*.swi
     source_refs.append(ref)
     source_builds.append(add('build:'+path, f'isa = PBXBuildFile; fileRef = {ref};'))
 info = add('info', 'isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = WorkMemory/Info.plist; sourceTree = "<group>";')
+signing = add('signing', 'isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = WorkMemory/Signing.xcconfig; sourceTree = "<group>";')
 privacy = add('privacy', 'isa = PBXFileReference; lastKnownFileType = text.xml; path = WorkMemory/PrivacyInfo.xcprivacy; sourceTree = "<group>";')
 privacy_build = add('privacy-build', f'isa = PBXBuildFile; fileRef = {privacy};')
 assets = add('assets', 'isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = WorkMemory/Assets.xcassets; sourceTree = "<group>";')
@@ -35,7 +58,7 @@ app = add('app-product', 'isa = PBXFileReference; explicitFileType = wrapper.app
 ui_file = add('ui-file', 'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkMemoryUITests/WorkMemoryUITests.swift; sourceTree = "<group>";')
 ui_product = add('ui-product', 'isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = WorkMemoryUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
 products = add('products', f'isa = PBXGroup; name = Products; children = {array([app,ui_product])}; sourceTree = "<group>";')
-main = add('main', f'isa = PBXGroup; children = {array(source_refs+[ui_file,info,privacy,assets,products])}; sourceTree = "<group>";')
+main = add('main', f'isa = PBXGroup; children = {array(source_refs+[ui_file,info,signing,privacy,assets,products])}; sourceTree = "<group>";')
 sources = add('sources', f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {array(source_builds)}; runOnlyForDeploymentPostprocessing = 0;')
 resources = add('resources', f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = {array([privacy_build,assets_build])}; runOnlyForDeploymentPostprocessing = 0;')
 frameworks = add('frameworks', 'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
@@ -51,7 +74,7 @@ for name in ['Debug','Release']:
     def settings(d): return '{' + ''.join(f'{k} = {q(v)};' for k,v in d.items()) + '}'
     project_configs.append(add('project-'+name, f'isa = XCBuildConfiguration; name = {name}; buildSettings = {settings(config)};'))
     target = {
-        'PRODUCT_NAME':'$(TARGET_NAME)', 'PRODUCT_BUNDLE_IDENTIFIER':'com.workmemory.personal',
+        'PRODUCT_NAME':'$(TARGET_NAME)', 'PRODUCT_BUNDLE_IDENTIFIER':'$(WORK_MEMORY_BUNDLE_IDENTIFIER)',
         'INFOPLIST_FILE':'WorkMemory/Info.plist','GENERATE_INFOPLIST_FILE':'NO',
         'CODE_SIGN_STYLE':'Automatic', 'TARGETED_DEVICE_FAMILY':'1',
         'CURRENT_PROJECT_VERSION':'1','MARKETING_VERSION':'0.1.0',
@@ -60,8 +83,7 @@ for name in ['Debug','Release']:
         'SWIFT_EMIT_LOC_STRINGS':'YES', 'SWIFT_STRICT_CONCURRENCY':'targeted',
         'SWIFT_ACTIVE_COMPILATION_CONDITIONS':'DEBUG' if name=='Debug' else '',
     }
-    if team_id: target['DEVELOPMENT_TEAM'] = team_id
-    target_configs.append(add('target-'+name,f'isa = XCBuildConfiguration; name = {name}; buildSettings = {settings(target)};'))
+    target_configs.append(add('target-'+name,f'isa = XCBuildConfiguration; name = {name}; baseConfigurationReference = {signing}; buildSettings = {settings(target)};'))
 pconfigs = add('project-config-list', f'isa = XCConfigurationList; buildConfigurations = {array(project_configs)}; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
 tconfigs = add('target-config-list', f'isa = XCConfigurationList; buildConfigurations = {array(target_configs)}; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
 target = add('target', f'isa = PBXNativeTarget; name = WorkMemory; productName = WorkMemory; productReference = {app}; productType = "com.apple.product-type.application"; buildConfigurationList = {tconfigs}; buildPhases = {array([sources,frameworks,resources])}; buildRules = (); dependencies = ();')
@@ -70,9 +92,8 @@ ui_sources = add('ui-sources', f'isa = PBXSourcesBuildPhase; buildActionMask = 2
 ui_frameworks = add('ui-frameworks', 'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
 ui_configs = []
 for name in ['Debug', 'Release']:
-    config = {'PRODUCT_NAME':'$(TARGET_NAME)', 'PRODUCT_BUNDLE_IDENTIFIER':'com.workmemory.personal.uitests', 'GENERATE_INFOPLIST_FILE':'YES', 'CODE_SIGN_STYLE':'Automatic', 'TEST_TARGET_NAME':'WorkMemory', 'TARGETED_DEVICE_FAMILY':'1', 'SWIFT_VERSION':'5.0'}
-    if team_id: config['DEVELOPMENT_TEAM'] = team_id
-    ui_configs.append(add('ui-config-'+name, f'isa = XCBuildConfiguration; name = {name}; buildSettings = {settings(config)};'))
+    config = {'PRODUCT_NAME':'$(TARGET_NAME)', 'PRODUCT_BUNDLE_IDENTIFIER':'$(WORK_MEMORY_BUNDLE_IDENTIFIER).uitests', 'GENERATE_INFOPLIST_FILE':'YES', 'CODE_SIGN_STYLE':'Automatic', 'TEST_TARGET_NAME':'WorkMemory', 'TARGETED_DEVICE_FAMILY':'1', 'SWIFT_VERSION':'5.0'}
+    ui_configs.append(add('ui-config-'+name, f'isa = XCBuildConfiguration; name = {name}; baseConfigurationReference = {signing}; buildSettings = {settings(config)};'))
 ui_config_list = add('ui-config-list', f'isa = XCConfigurationList; buildConfigurations = {array(ui_configs)}; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
 proxy = add('ui-proxy', f'isa = PBXContainerItemProxy; containerPortal = {uid("project")}; proxyType = 1; remoteGlobalIDString = {target}; remoteInfo = WorkMemory;')
 dependency = add('ui-dependency', f'isa = PBXTargetDependency; target = {target}; targetProxy = {proxy};')
